@@ -50,7 +50,8 @@ BLACKFOOTMANTILE = Tile(BLACKFOOTMAN, FOOTMANUP, FOOTMANDOWN)
 BLACKDUKETILE = Tile(BLACKDUKE, DUKEUP, DUKEDOWN)
 
 
-def gen_legal_moves(board, tile, row, col):
+def gen_legal_moves(board, row, col):
+    tile = board.board[row][col]
     legal_moves = []
     validDirs = []
     if tile.isUp:
@@ -199,10 +200,24 @@ def play():
     showPotentialMoves(GAMEBOARD, footman2Options)
     moveIndex = int(input("Select where you would like to place your second footman (0 - " + str(len(footman1Options) - 1) + "): "))
     GAMEBOARD = placeUnit(GAMEBOARD, footman2Options[moveIndex], WHITEFOOTMANTILE)
-    GAMEBOARD.print_board()
+    gameOver = False
+    while not gameOver:
+        GAMEBOARD.print_board()
+        action = int(input("Choose One:\n Move: 0\n Pull from bag: 1\n"))
+        if action == 0:
+            col = int(input("Enter the column of the piece to move: "))
+            row = NUM_COLS - 1 - int(input("Enter the row of the piece to move: "))
+            moveOptions = gen_legal_moves(GAMEBOARD, row, col)
+            showPotentialMoves(GAMEBOARD, moveOptions)
+            moveIndex = int(input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
+            GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], row, col)
+            WHITE_TO_PLAY = False
+        if action == 1:
+            #print("TODO: Handle bag drawing logic")
+            WHITE_TO_PLAY = False
 
 
-#play()
+play()
 #GAMEBOARD = Board(NUM_COLS)
 #GAMEBOARD.print_board()
 #placements = gen_legal_placements(GAMEBOARD)
