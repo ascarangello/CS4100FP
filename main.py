@@ -10,12 +10,14 @@ WHITEFOOTMAN = 2
 WHITEASSASSIN = 3
 WHITEBOWMAN = 4
 WHITECHAMPION = 5
+WHITEDRAGOON = 6
 EMPTY = 0
 BLACKDUKE = -1
 BLACKFOOTMAN = -2
 BLACKASSASSIN = -3
 BLACKBOWMAN = -4
 BLACKCHAMPION = -5
+BLACKDRAGOON = -6
 
 printable = {
     EMPTY: "[--]",
@@ -28,7 +30,9 @@ printable = {
     WHITEBOWMAN: "[WB]",
     BLACKBOWMAN: "[BB]",
     WHITECHAMPION: "[WC]",
-    BLACKCHAMPION: "[BC]"
+    BLACKCHAMPION: "[BC]",
+    WHITEDRAGOON: "[WDR]",
+    BLACKDRAGOON: "[BDR]"
 }
 
 WHITE_TO_PLAY = True
@@ -54,8 +58,13 @@ ASSASSINDOWN = [(0, 1, JUMPSLIDE), (-1, -1, JUMPSLIDE), (1, -1, JUMPSLIDE)]
 BOWMANUP = [(0, -1, MOVE), (1, 0, MOVE), (-1, 0, MOVE), (-2, 0, JUMP), (2, 0, JUMP), (0, 2, JUMP)]
 BOWMANDOWN = [(0, -1, MOVE), (1, 1, MOVE), (-1, 1, MOVE), (0, -2, STRIKE), (1, -1, STRIKE), (-1, -1, STRIKE)]
 
-CHAMPIONUP = [(1, 0, MOVE), (-1, 0, MOVE), (0, 1, MOVE), (0, -1, MOVE), (2, 0, JUMP), (-2, 0, JUMP), (0, 2, JUMP), (0, -2, JUMP)]
-CHAMPIONDOWN = [(1, 0, STRIKE), (-1, 0, STRIKE), (0, 1, STRIKE), (0, -1, STRIKE), (2, 0, JUMP), (-2, 0, JUMP), (0, 2, JUMP), (0, -2, JUMP)]
+CHAMPIONUP = [(1, 0, MOVE), (-1, 0, MOVE), (0, 1, MOVE), (0, -1, MOVE), (2, 0, JUMP), (-2, 0, JUMP), (0, 2, JUMP),
+              (0, -2, JUMP)]
+CHAMPIONDOWN = [(1, 0, STRIKE), (-1, 0, STRIKE), (0, 1, STRIKE), (0, -1, STRIKE), (2, 0, JUMP), (-2, 0, JUMP),
+                (0, 2, JUMP), (0, -2, JUMP)]
+
+DRAGOONUP = [(-1, 0, MOVE), (1, 0, MOVE), (0, -2, STRIKE), (-2, -2, STRIKE), (2, -2, STRIKE)]
+DRAGOONDOWN = [(0, -1, MOVE), (0, -2, MOVE), (1, -2, JUMP), (-1, -2, JUMP), (-1, 1, SLIDE), (1, 1, SLIDE)]
 
 class Tile:
     def __init__(self, type, upMoves, downMoves):
@@ -81,8 +90,13 @@ BLACKBOWMANTILE = Tile(BLACKBOWMAN, BOWMANUP, BOWMANDOWN)
 WHITECHAMPIONTILE = Tile(WHITECHAMPION, CHAMPIONUP, CHAMPIONDOWN)
 BLACKCHAMPIONTILE = Tile(BLACKCHAMPION, CHAMPIONUP, CHAMPIONDOWN)
 
+WHITEDRAGOONTILE = Tile(WHITEDRAGOON, DRAGOONUP, DRAGOONDOWN)
+BLACKDRAGOONTILE = Tile(BLACKDRAGOON, DRAGOONUP, DRAGOONDOWN)
 
 
+# USE THIS TO GENERATE ALL LEGAL MOVES FOR A TILE AT THE GIVEN ROW AND COL
+# RETURNS 2 ARRAYS, ONE OF THE DESTINATION ROW AND COLS OF ALL VALID MOVES
+# SECOND ARRAY HAS THE TYPE OF MOVE, NEED THAT FOR MAKING MOVE
 def gen_legal_moves(board, row, col):
     tile = board.board[row][col]
     legal_moves = []
@@ -93,7 +107,7 @@ def gen_legal_moves(board, row, col):
     else:
         validDirs = tile.downMoves
     for x_delta, y_delta, moveType in validDirs:
-        if (tile.type < 0 and row != 6) or (tile.type > 0 and row == 0):
+        if tile.type < 0:
             y_delta *= -1
         if (col + x_delta < 0) or (col + x_delta >= NUM_COLS):
             continue
@@ -154,6 +168,7 @@ def gen_legal_moves(board, row, col):
                 targetType = board.board[y_pos][x_pos].type
                 if targetType == EMPTY:
                     legal_moves.append((y_pos, x_pos))
+                    moveTypes.append(moveType)
                     x_index += x_delta
                     y_index += y_delta
                 elif (targetType < EMPTY and tile.type > EMPTY) or (targetType > EMPTY and tile.type < EMPTY):
@@ -192,6 +207,35 @@ def gen_legal_moves(board, row, col):
                     x_index += x_delta
                     y_index += y_delta
     return legal_moves, moveTypes
+
+# USE THIS TO SEE IF SOMEONE HAS WON
+# CHECKWHITEWIN = TRUE IF CHECKING FOR WHITE, FALSE FOR BLACK
+def check_if_won(board, checkWhiteWin):
+    targetType = 0
+    if checkWhiteWin:
+        targetType = BLACKDUKE
+    else:
+        targetType = WHITEDUKE
+    dukeRow = 0
+    dukeCol = 0
+    dukeInCheck = False
+    for row in range(NUM_COLS):
+        for col in range(NUM_COLS):
+            if board.board[row][col].type == targetType:
+                dukeMoves, dukeMoveTypes = gen_legal_moves(board, row, col)
+                dukeRow = row
+                dukeCol = col
+                for row in range(NUM_COLS):
+                    for col in range(NUM_COLS):
+                        if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(
+                                board.board[row][col].type) != targetType // abs(targetType):
+                            moves, moveTypes = gen_legal_moves(board, row, col)
+                            if (dukeRow, dukeCol) in moves:
+                                dukeInCheck = True
+                            for move in moves:
+                                if move in dukeMoves:
+                                    dukeMoves.remove(move)
+                return dukeInCheck and len(dukeMoves) == 0
 
 
 class Board:
@@ -236,12 +280,14 @@ def moveUnit(board, move, moveType, row, col):
     toMove.isUp = not toMove.isUp
     return newState
 
+# Place the given tile at the given placement on the given board and return a new copy of the board
 def placeUnit(board, placement, Tile):
     newState = copy.deepcopy(board)
     newState.board[placement[0]][placement[1]] = Tile
     return newState
 
-# Will give a list of valid placements based on whos turn it is and where the duke is
+
+# Will give a list of valid new unit placements based on whos turn it is and where the duke is
 def gen_legal_placements(board):
     target = (0, 0)
     for row in range(NUM_COLS):
@@ -262,46 +308,58 @@ def gen_legal_placements(board):
             legal_placements.append((target[0] + y_delta, target[1] + x_delta))
     return legal_placements
 
-class Bags:
-  def __init__(self):
-    self.playerBag = [WHITEFOOTMANTILE, WHITEASSASSINTILE, WHITEBOWMANTILE, WHITECHAMPIONTILE]
-    self.aiBag = [BLACKFOOTMANTILE, BLACKASSASSINTILE, BLACKBOWMANTILE, BLACKCHAMPIONTILE]
 
-  def pull(self, isPlayersTurn):
-    if isPlayersTurn:
-      if len(self.playerBag) == 0:
-        print("Bag is empty! Move a unit instead!")
-        return EMPTYTILE
-      toRemove = self.playerBag[random.randrange(len(self.playerBag))]
-      print("You drew a " + printable[toRemove.type])
-      self.playerBag.remove(toRemove)
-      return toRemove
-    else:
-      if len(self.aiBag) == 0:
-        return EMPTYTILE
-      toRemove = self.aiBag[random.randrange(len(self.aiBag))]
-      self.aiBag.remove(toRemove)
-      return toRemove
+class Bags:
+    # Start by filling each bag with the correct number of units
+    def __init__(self):
+        self.playerBag = [WHITEFOOTMANTILE, WHITEASSASSINTILE, WHITEBOWMANTILE, WHITECHAMPIONTILE, WHITEDRAGOONTILE]
+        self.aiBag = [BLACKFOOTMANTILE, BLACKASSASSINTILE, BLACKBOWMANTILE, BLACKCHAMPIONTILE, BLACKDRAGOONTILE]
+
+    # Pull a unit from the bag based on which player turn it is (bool)
+    # Returns an empty tile if bag is empty
+    def pull(self, isPlayersTurn):
+        if isPlayersTurn:
+            if len(self.playerBag) == 0:
+                print("Bag is empty! Move a unit instead!")
+                return EMPTYTILE
+            toRemove = self.playerBag[random.randrange(len(self.playerBag))]
+            print("You drew a " + printable[toRemove.type])
+            self.playerBag.remove(toRemove)
+            return toRemove
+        else:
+            if len(self.aiBag) == 0:
+                return EMPTYTILE
+            toRemove = self.aiBag[random.randrange(len(self.aiBag))]
+            self.aiBag.remove(toRemove)
+            return toRemove
 
 
 def play():
+    # Generate board and bags
     GAMEBOARD = Board(NUM_COLS)
     UNITBAG = Bags()
+
+    # Have player enter starting info
     startingCol = int(input("Enter the column of your Duke (0 - 5): "))
     GAMEBOARD = placeUnit(GAMEBOARD, (5, startingCol), WHITEDUKETILE)
     GAMEBOARD.print_board()
     footman1Options = gen_legal_placements(GAMEBOARD)
     showPotentialMoves(GAMEBOARD, footman1Options)
-    moveIndex = int(input("Select where you would like to place your first footman (0 - " + str(len(footman1Options) - 1) + "): "))
+    moveIndex = int(
+        input("Select where you would like to place your first footman (0 - " + str(len(footman1Options) - 1) + "): "))
     GAMEBOARD = placeUnit(GAMEBOARD, footman1Options[moveIndex], WHITEFOOTMANTILE)
     GAMEBOARD.print_board()
     footman2Options = gen_legal_placements(GAMEBOARD)
     showPotentialMoves(GAMEBOARD, footman2Options)
-    moveIndex = int(input("Select where you would like to place your second footman (0 - " + str(len(footman1Options) - 1) + "): "))
+    moveIndex = int(
+        input("Select where you would like to place your second footman (0 - " + str(len(footman1Options) - 1) + "): "))
     GAMEBOARD = placeUnit(GAMEBOARD, footman2Options[moveIndex], WHITEFOOTMANTILE)
+
+    # Main game loop
     gameOver = False
     while not gameOver:
         GAMEBOARD.print_board()
+        # Player chooses action
         action = int(input("Choose One:\n Move: 0\n Pull from bag: 1\n"))
         if action == 0:
             col = int(input("Enter the column of the piece to move: "))
@@ -311,11 +369,15 @@ def play():
                 print("No moves available for the selected unit, please try again")
                 continue
             showPotentialMoves(GAMEBOARD, moveOptions)
-            moveIndex = int(input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
+            moveIndex = int(
+                input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
             GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], moveTypes[moveIndex], row, col)
+            if check_if_won(GAMEBOARD, True):
+                print("White wins!")
+                gameOver = True
             WHITE_TO_PLAY = False
+
         if action == 1:
-            #print("TODO: Handle bag drawing logic")
             newUnit = UNITBAG.pull(True)
             if newUnit == EMPTYTILE:
                 continue
@@ -324,23 +386,24 @@ def play():
             moveIndex = int(input("Select where you would like to place the new unit (0 - " + str(
                 len(placementOptions) - 1) + "): "))
             GAMEBOARD = placeUnit(GAMEBOARD, placementOptions[moveIndex], newUnit)
+            if check_if_won(GAMEBOARD, True):
+                print("White wins!")
+                gameOver = True
             GAMEBOARD.print_board()
             WHITE_TO_PLAY = False
+    print("Game ended")
 
 
 play()
-#GAMEBOARD = Board(NUM_COLS)
-#GAMEBOARD.print_board()
-#placements = gen_legal_placements(GAMEBOARD)
-#showPotentialMoves(GAMEBOARD, placements)
-#GAMEBOARD = placeUnit(GAMEBOARD, placements[0], WHITEFOOTMANTILE)
-#GAMEBOARD.print_board()
-#moves = gen_legal_moves(GAMEBOARD, GAMEBOARD.board[2][2], 2, 2)
-#showPotentialMoves(GAMEBOARD, moves)
-#GAMEBOARD = moveUnit(GAMEBOARD, moves[2], 2, 2)
-#GAMEBOARD.print_board()
-#moves = gen_legal_moves(GAMEBOARD, GAMEBOARD.board[2][3], 2, 3)
-#showPotentialMoves(GAMEBOARD, moves)
-
-
-
+# GAMEBOARD = Board(NUM_COLS)
+# GAMEBOARD.print_board()
+# placements = gen_legal_placements(GAMEBOARD)
+# showPotentialMoves(GAMEBOARD, placements)
+# GAMEBOARD = placeUnit(GAMEBOARD, placements[0], WHITEFOOTMANTILE)
+# GAMEBOARD.print_board()
+# moves = gen_legal_moves(GAMEBOARD, GAMEBOARD.board[2][2], 2, 2)
+# showPotentialMoves(GAMEBOARD, moves)
+# GAMEBOARD = moveUnit(GAMEBOARD, moves[2], 2, 2)
+# GAMEBOARD.print_board()
+# moves = gen_legal_moves(GAMEBOARD, GAMEBOARD.board[2][3], 2, 3)
+# showPotentialMoves(GAMEBOARD, moves)
