@@ -1,5 +1,6 @@
 import copy
 import random
+from collections import defaultdict
 import sys
 import numpy as np
 
@@ -99,6 +100,12 @@ BLACKDRAGOONTILE = Tile(BLACKDRAGOON, DRAGOONUP, DRAGOONDOWN)
 # SECOND ARRAY HAS THE TYPE OF MOVE, NEED THAT FOR MAKING MOVE
 def gen_legal_moves(board, row, col):
     tile = board.board[row][col]
+    isWhiteTile = tile.type // abs(tile.type)
+    opponentInCheck = False
+    if board.whiteInCheck and isWhiteTile and tile.type != WHITEDUKE:
+        return [], [], False
+    elif board.blackInCheck and not isWhiteTile and tile.type != BLACKDUKE:
+        return [], [], False
     legal_moves = []
     moveTypes = []
     validDirs = []
@@ -206,7 +213,14 @@ def gen_legal_moves(board, row, col):
                 else:
                     x_index += x_delta
                     y_index += y_delta
-    return legal_moves, moveTypes
+    for move in legal_moves:
+        if board.board[move[0]][move[1]].type == isWhiteTile * -1:
+            pos = legal_moves.index(move)
+            pos = legal_moves.index(move)
+            legal_moves.remove(move)
+            del moveTypes[pos]
+            opponentInCheck = True
+    return legal_moves, moveTypes, opponentInCheck
 
 # USE THIS TO SEE IF SOMEONE HAS WON
 # CHECKWHITEWIN = TRUE IF CHECKING FOR WHITE, FALSE FOR BLACK
@@ -222,31 +236,57 @@ def check_if_won(board, checkWhiteWin):
     for row in range(NUM_COLS):
         for col in range(NUM_COLS):
             if board.board[row][col].type == targetType:
-                dukeMoves, dukeMoveTypes = gen_legal_moves(board, row, col)
+                dukeMoves, dukeMoveTypes, ignore = gen_legal_moves(board, row, col)
                 dukeRow = row
                 dukeCol = col
                 for row in range(NUM_COLS):
                     for col in range(NUM_COLS):
                         if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(
                                 board.board[row][col].type) != targetType // abs(targetType):
-                            moves, moveTypes = gen_legal_moves(board, row, col)
-                            if (dukeRow, dukeCol) in moves:
+                            moves, moveTypes, opponentInCheck = gen_legal_moves(board, row, col)
+                            if opponentInCheck:
                                 dukeInCheck = True
                             for move in moves:
                                 if move in dukeMoves:
                                     dukeMoves.remove(move)
                 return dukeInCheck and len(dukeMoves) == 0
 
+def check_in_check(board, checkForWhite):
+    targetType = 0
+    if checkForWhite == 1:
+        targetType = WHITEDUKE
+    else:
+        targetType = BLACKDUKE
+    dukeRow = 0
+    dukeCol = 0
+    dukeInCheck = False
+    for row in range(NUM_COLS):
+        for col in range(NUM_COLS):
+            if board.board[row][col].type == targetType:
+                dukeMoves, dukeMoveTypes, ignore = gen_legal_moves(board, row, col)
+                dukeRow = row
+                dukeCol = col
+                for row in range(NUM_COLS):
+                    for col in range(NUM_COLS):
+                        if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(
+                                board.board[row][col].type) != targetType // abs(targetType):
+                            moves, moveTypes, opponentInCheck = gen_legal_moves(board, row, col)
+                            if opponentInCheck:
+                                return True
+    return False
 
 class Board:
     def __init__(self, size):
-        self.board = [[EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
+        self.board = [[EMPTYTILE, BLACKFOOTMANTILE, BLACKDUKETILE, BLACKFOOTMANTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE]]
-
+        self.whiteToPlay = 1
+        self.bags = Bags()
+        self.whiteInCheck = False
+        self.blackInCheck = False
     def print_board(self):
         for row in range(NUM_COLS):
             line = ""
@@ -278,12 +318,14 @@ def moveUnit(board, move, moveType, row, col):
     elif moveType == STRIKE:
         newState.board[move[0]][move[1]] = EMPTYTILE
     toMove.isUp = not toMove.isUp
+    newState.whiteToPlay = -1 * newState.whiteToPlay
     return newState
 
 # Place the given tile at the given placement on the given board and return a new copy of the board
 def placeUnit(board, placement, Tile):
     newState = copy.deepcopy(board)
     newState.board[placement[0]][placement[1]] = Tile
+    newState.whiteToPlay = -1 * newState.whiteToPlay
     return newState
 
 
@@ -318,12 +360,12 @@ class Bags:
     # Pull a unit from the bag based on which player turn it is (bool)
     # Returns an empty tile if bag is empty
     def pull(self, isPlayersTurn):
-        if isPlayersTurn:
+        if isPlayersTurn == 1:
             if len(self.playerBag) == 0:
-                print("Bag is empty! Move a unit instead!")
+                #print("Bag is empty! Move a unit instead!")
                 return EMPTYTILE
             toRemove = self.playerBag[random.randrange(len(self.playerBag))]
-            print("You drew a " + printable[toRemove.type])
+            # print("You drew a " + printable[toRemove.type])
             self.playerBag.remove(toRemove)
             return toRemove
         else:
@@ -333,11 +375,128 @@ class Bags:
             self.aiBag.remove(toRemove)
             return toRemove
 
+# Tree structure from https://github.com/int8/monte-carlo-tree-search
+class Node:
+    def __init__(self, boardState, parent=None):
+        self.state = boardState
+        self.parent = parent
+        self.children = []
+        self.number_of_visits = 0
+        self.results = defaultdict(int)
+        self.untried_states = gen_legal_actions(self.state)
+
+
+    def q(self):
+        wins = self.results[self.parent.state.whiteToPlay]
+        loses = self.results[-1 * self.parent.state.whiteToPlay]
+        return wins - loses
+
+    def n(self):
+        return self.number_of_visits
+
+    def expand(self):
+        nextMove = self.untried_states.pop()
+        child = Node(nextMove, parent=self)
+        self.children.append(child)
+        return child
+
+    def is_terminal_node(self):
+        return checkResults(self.state) != 0
+
+    def rollout(self):
+        current_state = self.state
+        while checkResults(current_state) == 0:
+            valid_states = gen_legal_actions(current_state)
+            # for state in valid_states:
+                # state.print_board()
+            if len(valid_states) != 0:
+                current_state = valid_states[np.random.randint(0, len(valid_states))]
+            else:
+                break
+        return checkResults(current_state)
+
+    def best_child(self, c_param=1.4):
+        weights = [
+            (c.q() / c.n()) + 1.4 * np.sqrt((2 * np.log(self.n()) / c.n()))
+            for c in self.children
+        ]
+        return self.children[np.argmax(weights)]
+
+    def is_fully_expanded(self):
+        return len(self.untried_states) == 0
+
+    def backpropogate(self, result):
+        self.number_of_visits += 1
+        self.results[result] += 1
+        if self.parent:
+            self.parent.backpropogate(result)
+
+class SearchTree:
+    def __init__(self, node):
+        self.root = node
+
+    def choose_action(self, depth):
+        for x in range(depth):
+            n = self.tree_policy()
+            reward = n.rollout()
+            n.backpropogate(reward)
+        return self.root.best_child(c_param=0.0)
+
+    def tree_policy(self):
+        current_node = self.root
+        while not current_node.is_terminal_node():
+            if not current_node.is_fully_expanded():
+                return current_node.expand()
+            else:
+                current_node = current_node.best_child()
+        return current_node
+
+def checkResults(state):
+    if check_if_won(state, True):
+        return 1
+    elif check_if_won(state, False):
+        return -1
+    else:
+        return 0
+
+def gen_legal_actions(state):
+    valid_states = []
+    if check_in_check(state, state.whiteToPlay):
+        #print(str(state.whiteToPlay) + " in check")
+        if state.whiteToPlay:
+            state.whiteInCheck = True
+        else:
+            state.blackInCheck = True
+    else:
+        if state.whiteToPlay:
+            state.whiteInCheck = False
+        else:
+            state.blackInCheck = False
+    for row in range(NUM_COLS):
+        for col in range(NUM_COLS):
+            if state.whiteToPlay == 1:
+                if state.board[row][col].type > 0:
+                    allMoves, allTypes, opponentInCheck = gen_legal_moves(state, row, col)
+                    for index in range(len(allMoves)):
+                        valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+            else:
+                if state.board[row][col].type < 0:
+                    allMoves, allTypes, opponentInCheck = gen_legal_moves(state, row, col)
+                    for index in range(len(allMoves)):
+                        valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+
+    if (state.whiteToPlay == 1 and not state.whiteInCheck) or (state.whiteToPlay == -1 and not state.blackInCheck):
+        newUnit = state.bags.pull(state.whiteToPlay)
+        if newUnit != EMPTYTILE:
+            placementOptions = gen_legal_placements(state)
+            for option in placementOptions:
+                valid_states.append(placeUnit(state, option, newUnit))
+    return valid_states
+
 
 def play():
     # Generate board and bags
     GAMEBOARD = Board(NUM_COLS)
-    UNITBAG = Bags()
 
     # Have player enter starting info
     startingCol = int(input("Enter the column of your Duke (0 - 5): "))
@@ -354,7 +513,7 @@ def play():
     moveIndex = int(
         input("Select where you would like to place your second footman (0 - " + str(len(footman1Options) - 1) + "): "))
     GAMEBOARD = placeUnit(GAMEBOARD, footman2Options[moveIndex], WHITEFOOTMANTILE)
-
+    GAMEBOARD.whiteToPlay = 1
     # Main game loop
     gameOver = False
     while not gameOver:
@@ -364,7 +523,7 @@ def play():
         if action == 0:
             col = int(input("Enter the column of the piece to move: "))
             row = NUM_COLS - 1 - int(input("Enter the row of the piece to move: "))
-            moveOptions, moveTypes = gen_legal_moves(GAMEBOARD, row, col)
+            moveOptions, moveTypes, ignore = gen_legal_moves(GAMEBOARD, row, col)
             if len(moveOptions) == 0:
                 print("No moves available for the selected unit, please try again")
                 continue
@@ -372,13 +531,9 @@ def play():
             moveIndex = int(
                 input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
             GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], moveTypes[moveIndex], row, col)
-            if check_if_won(GAMEBOARD, True):
-                print("White wins!")
-                gameOver = True
             WHITE_TO_PLAY = False
-
         if action == 1:
-            newUnit = UNITBAG.pull(True)
+            newUnit = GAMEBOARD.bags.pull(True)
             if newUnit == EMPTYTILE:
                 continue
             placementOptions = gen_legal_placements(GAMEBOARD)
@@ -386,17 +541,33 @@ def play():
             moveIndex = int(input("Select where you would like to place the new unit (0 - " + str(
                 len(placementOptions) - 1) + "): "))
             GAMEBOARD = placeUnit(GAMEBOARD, placementOptions[moveIndex], newUnit)
-            if check_if_won(GAMEBOARD, True):
-                print("White wins!")
-                gameOver = True
             GAMEBOARD.print_board()
             WHITE_TO_PLAY = False
+        result = checkResults(GAMEBOARD)
+        if result > 0:
+            print("White wins!")
+            gameOver = True
+        elif result < 0:
+            print("Black wins")
+            gameOver = True
+        else:
+            print("Game continues, no winner yet\n")
+        print("AI playing now")
+        root = Node(GAMEBOARD)
+        tree = SearchTree(root)
+        best_node = tree.choose_action(100)
+        GAMEBOARD = best_node.state
+        best_node.state.print_board()
     print("Game ended")
 
 
 play()
-# GAMEBOARD = Board(NUM_COLS)
+#GAMEBOARD = Board(NUM_COLS)
 # GAMEBOARD.print_board()
+#root = Node(GAMEBOARD)
+#tree = SearchTree(root)
+#best_node = tree.choose_action(100)
+#best_node.state.print_board()
 # placements = gen_legal_placements(GAMEBOARD)
 # showPotentialMoves(GAMEBOARD, placements)
 # GAMEBOARD = placeUnit(GAMEBOARD, placements[0], WHITEFOOTMANTILE)
