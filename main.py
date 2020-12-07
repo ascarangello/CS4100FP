@@ -232,7 +232,11 @@ def check_in_check(board, checkingWhite):
             if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(board.board[row][col].type) == checkingWhite * -1:
                 moves, moveTypes = gen_legal_moves(board, row, col, False)
                 enemyMoves.append(moves)
-    return dukePos in enemyMoves
+    for bigMove in enemyMoves:
+        for moves in bigMove:
+            if moves == dukePos:
+                return True
+    return False
 
 # If 1, check if white has won
 def check_game_won(board, checkingWhite):
@@ -258,9 +262,11 @@ def gen_duke_moves(board, checkingWhite):
             if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(board.board[row][col].type) == checkingWhite * -1:
                 moves, moveTypes = gen_legal_moves(board, row, col, False)
                 enemyMoves.append(moves)
-    for dukeMove in dukeMoves:
-        if dukeMove in enemyMoves:
-            dukeMoves.remove(dukeMove)
+    for bigMove in enemyMoves:
+        for moves in bigMove:
+            for dukeMove in dukeMoves:
+                if dukeMove == moves:
+                    dukeMoves.remove(dukeMove)
     return dukeMoves, ignore
 
 
@@ -271,7 +277,7 @@ class Board:
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
-                      [EMPTYTILE, WHITEFOOTMANTILE, WHITEDUKETILE, WHITEFOOTMANTILE, EMPTYTILE, EMPTYTILE]]
+                      [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE]]
         self.whiteToPlay = 1
         self.bags = Bags()
     def print_board(self):
@@ -317,6 +323,10 @@ def placeUnit(board, placement, Tile):
     newState.whiteToPlay = -1 * newState.whiteToPlay
     return newState
 
+def placeStartingUnit(board, placement, Tile):
+    newState = copy.deepcopy(board)
+    newState.board[placement[0]][placement[1]] = Tile
+    return newState
 
 # Will give a list of valid new unit placements based on whos turn it is and where the duke is
 def gen_legal_placements(board):
@@ -404,8 +414,8 @@ class Node:
             else:
                 print("No result")
                 break
-        print(checkResults(current_state))
         current_state.print_board()
+        print(len(gen_duke_moves(current_state, current_state.whiteToPlay)))
         return checkResults(current_state)
 
     def best_child(self, c_param=1.4):
@@ -477,7 +487,7 @@ def gen_legal_actions(state):
                         allMoves, allTypes = gen_legal_moves(state, row, col, True)
                         for index in range(len(allMoves)):
                             valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
-        if not inCheck:
+        if not inCheck and len(gen_legal_placements(state)) > 0:
             newUnit = state.bags.pull(state.whiteToPlay)
             if newUnit != EMPTYTILE:
                 placementOptions = gen_legal_placements(state)
@@ -490,19 +500,19 @@ def play():
     GAMEBOARD = Board(NUM_COLS)
     # Have player enter starting info
     startingCol = int(input("Enter the column of your Duke (0 - 5): "))
-    GAMEBOARD = placeUnit(GAMEBOARD, (5, startingCol), WHITEDUKETILE)
+    GAMEBOARD = placeStartingUnit(GAMEBOARD, (5, startingCol), WHITEDUKETILE)
     GAMEBOARD.print_board()
     footman1Options = gen_legal_placements(GAMEBOARD)
     showPotentialMoves(GAMEBOARD, footman1Options)
     moveIndex = int(
         input("Select where you would like to place your first footman (0 - " + str(len(footman1Options) - 1) + "): "))
-    GAMEBOARD = placeUnit(GAMEBOARD, footman1Options[moveIndex], WHITEFOOTMANTILE)
+    GAMEBOARD = placeStartingUnit(GAMEBOARD, footman1Options[moveIndex], WHITEFOOTMANTILE)
     GAMEBOARD.print_board()
     footman2Options = gen_legal_placements(GAMEBOARD)
     showPotentialMoves(GAMEBOARD, footman2Options)
     moveIndex = int(
         input("Select where you would like to place your second footman (0 - " + str(len(footman1Options) - 1) + "): "))
-    GAMEBOARD = placeUnit(GAMEBOARD, footman2Options[moveIndex], WHITEFOOTMANTILE)
+    GAMEBOARD = placeStartingUnit(GAMEBOARD, footman2Options[moveIndex], WHITEFOOTMANTILE)
     GAMEBOARD.whiteToPlay = 1
     # Main game loop
     gameOver = False
@@ -543,18 +553,19 @@ def play():
         print("AI playing now")
         root = Node(GAMEBOARD)
         tree = SearchTree(root)
-        best_node = tree.choose_action(100)
+        best_node = tree.choose_action(5)
         GAMEBOARD = best_node.state
     print("Game ended")
 
 
-#play()
-GAMEBOARD = Board(NUM_COLS)
+play()
+#GAMEBOARD = Board(NUM_COLS)
 # GAMEBOARD.print_board()
-root = Node(GAMEBOARD)
-tree = SearchTree(root)
-best_node = tree.choose_action(1000)
-best_node.state.print_board()
+# root = Node(GAMEBOARD)
+# tree = SearchTree(root)
+# best_node = tree.choose_action(5)
+# print(len(gen_legal_actions(best_node.state)))
+# best_node.state.print_board()
 # placements = gen_legal_placements(GAMEBOARD)
 # showPotentialMoves(GAMEBOARD, placements)
 # GAMEBOARD = placeUnit(GAMEBOARD, placements[0], WHITEFOOTMANTILE)
