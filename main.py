@@ -36,7 +36,6 @@ printable = {
     BLACKDRAGOON: "[BDR]"
 }
 
-WHITE_TO_PLAY = True
 
 SQUAREPLACEMENT = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
@@ -98,14 +97,9 @@ BLACKDRAGOONTILE = Tile(BLACKDRAGOON, DRAGOONUP, DRAGOONDOWN)
 # USE THIS TO GENERATE ALL LEGAL MOVES FOR A TILE AT THE GIVEN ROW AND COL
 # RETURNS 2 ARRAYS, ONE OF THE DESTINATION ROW AND COLS OF ALL VALID MOVES
 # SECOND ARRAY HAS THE TYPE OF MOVE, NEED THAT FOR MAKING MOVE
-def gen_legal_moves(board, row, col):
+def gen_legal_moves(board, row, col, noDukeAttack):
     tile = board.board[row][col]
     isWhiteTile = tile.type // abs(tile.type)
-    opponentInCheck = False
-    if board.whiteInCheck and isWhiteTile and tile.type != WHITEDUKE:
-        return [], [], False
-    elif board.blackInCheck and not isWhiteTile and tile.type != BLACKDUKE:
-        return [], [], False
     legal_moves = []
     moveTypes = []
     validDirs = []
@@ -142,22 +136,25 @@ def gen_legal_moves(board, row, col):
                 targetType = board.board[row + y_delta][col + x_delta].type
                 if targetType == EMPTY or (targetType < EMPTY and tile.type > EMPTY) or (
                         targetType > EMPTY and tile.type < EMPTY):
-                    legal_moves.append((row + y_delta, col + x_delta))
-                    moveTypes.append(moveType)
+                    if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
+                        legal_moves.append((row + y_delta, col + x_delta))
+                        moveTypes.append(moveType)
 
         if moveType == JUMP:
             targetType = board.board[row + y_delta][col + x_delta].type
             if targetType == EMPTY or (targetType < EMPTY and tile.type > EMPTY) or (
                     targetType > EMPTY and tile.type < EMPTY):
-                legal_moves.append((row + y_delta, col + x_delta))
-                moveTypes.append(moveType)
+                if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
+                    legal_moves.append((row + y_delta, col + x_delta))
+                    moveTypes.append(moveType)
 
         if moveType == STRIKE:
             targetType = board.board[row + y_delta][col + x_delta].type
             if (targetType < EMPTY and tile.type > EMPTY) or (
                     targetType > EMPTY and tile.type < EMPTY):
-                legal_moves.append((row + y_delta, col + x_delta))
-                moveTypes.append(moveType)
+                if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
+                    legal_moves.append((row + y_delta, col + x_delta))
+                    moveTypes.append(moveType)
 
         if moveType == SLIDE:
             x_index = x_delta
@@ -179,10 +176,11 @@ def gen_legal_moves(board, row, col):
                     x_index += x_delta
                     y_index += y_delta
                 elif (targetType < EMPTY and tile.type > EMPTY) or (targetType > EMPTY and tile.type < EMPTY):
-                    legal_moves.append((y_pos, x_pos))
-                    moveTypes.append(moveType)
-                    stop = True
-                    continue
+                    if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
+                        legal_moves.append((y_pos, x_pos))
+                        moveTypes.append(moveType)
+                        stop = True
+                        continue
                 else:
                     stop = True
 
@@ -206,74 +204,65 @@ def gen_legal_moves(board, row, col):
                     x_index += x_delta
                     y_index += y_delta
                 elif (targetType < EMPTY and tile.type > EMPTY) or (targetType > EMPTY and tile.type < EMPTY):
-                    legal_moves.append((y_pos, x_pos))
-                    moveTypes.append(moveType)
-                    x_index += x_delta
-                    y_index += y_delta
+                    if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
+                        legal_moves.append((y_pos, x_pos))
+                        moveTypes.append(moveType)
+                        x_index += x_delta
+                        y_index += y_delta
                 else:
                     x_index += x_delta
                     y_index += y_delta
-    for move in legal_moves:
-        if board.board[move[0]][move[1]].type == isWhiteTile * -1:
-            pos = legal_moves.index(move)
-            pos = legal_moves.index(move)
-            legal_moves.remove(move)
-            del moveTypes[pos]
-            opponentInCheck = True
-    return legal_moves, moveTypes, opponentInCheck
+    return legal_moves, moveTypes
 
-# USE THIS TO SEE IF SOMEONE HAS WON
-# CHECKWHITEWIN = TRUE IF CHECKING FOR WHITE, FALSE FOR BLACK
-def check_if_won(board, checkWhiteWin):
-    targetType = 0
-    if checkWhiteWin:
-        targetType = BLACKDUKE
+
+def check_in_check(board, checkingWhite):
+    target = EMPTY
+    if checkingWhite == 1:
+        target = WHITEDUKE
     else:
-        targetType = WHITEDUKE
-    dukeRow = 0
-    dukeCol = 0
-    dukeInCheck = False
+        target = BLACKDUKE
+    enemyMoves = []
+    dukePos = None
     for row in range(NUM_COLS):
         for col in range(NUM_COLS):
-            if board.board[row][col].type == targetType:
-                dukeMoves, dukeMoveTypes, ignore = gen_legal_moves(board, row, col)
-                dukeRow = row
-                dukeCol = col
-                for row in range(NUM_COLS):
-                    for col in range(NUM_COLS):
-                        if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(
-                                board.board[row][col].type) != targetType // abs(targetType):
-                            moves, moveTypes, opponentInCheck = gen_legal_moves(board, row, col)
-                            if opponentInCheck:
-                                dukeInCheck = True
-                            for move in moves:
-                                if move in dukeMoves:
-                                    dukeMoves.remove(move)
-                return dukeInCheck and len(dukeMoves) == 0
-
-def check_in_check(board, checkForWhite):
-    targetType = 0
-    if checkForWhite == 1:
-        targetType = WHITEDUKE
-    else:
-        targetType = BLACKDUKE
-    dukeRow = 0
-    dukeCol = 0
-    dukeInCheck = False
+            if board.board[row][col].type == target:
+                dukePos = (row, col)
     for row in range(NUM_COLS):
         for col in range(NUM_COLS):
-            if board.board[row][col].type == targetType:
-                dukeMoves, dukeMoveTypes, ignore = gen_legal_moves(board, row, col)
-                dukeRow = row
-                dukeCol = col
-                for row in range(NUM_COLS):
-                    for col in range(NUM_COLS):
-                        if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(
-                                board.board[row][col].type) != targetType // abs(targetType):
-                            moves, moveTypes, opponentInCheck = gen_legal_moves(board, row, col)
-                            if opponentInCheck:
-                                return True
-    return False
+            if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(board.board[row][col].type) == checkingWhite * -1:
+                moves, moveTypes = gen_legal_moves(board, row, col, False)
+                enemyMoves.append(moves)
+    return dukePos in enemyMoves
+
+# If 1, check if white has won
+def check_game_won(board, checkingWhite):
+    return len(gen_duke_moves(board, checkingWhite * -1)) == 0 and check_in_check(checkingWhite * -1)
+
+def gen_duke_moves(board, checkingWhite):
+    target = EMPTY
+    if checkingWhite == 1:
+        target = WHITEDUKE
+    else:
+        target = BLACKDUKE
+    dukeMoves = []
+    enemyMoves = []
+    ignore = []
+    dukePos = None
+    for row in range(NUM_COLS):
+        for col in range(NUM_COLS):
+            if board.board[row][col].type == target:
+                dukePos = (row, col)
+                dukeMoves, ignore = gen_legal_moves(board, row, col, True)
+    for row in range(NUM_COLS):
+        for col in range(NUM_COLS):
+            if board.board[row][col].type != EMPTY and board.board[row][col].type // abs(board.board[row][col].type) == checkingWhite * -1:
+                moves, moveTypes = gen_legal_moves(board, row, col, False)
+                enemyMoves.append(moves)
+    for dukeMove in dukeMoves:
+        if dukeMove in enemyMoves:
+            dukeMoves.remove(dukeMove)
+    return dukeMoves, ignore
+
 
 class Board:
     def __init__(self, size):
@@ -282,11 +271,9 @@ class Board:
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
-                      [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE]]
+                      [EMPTYTILE, WHITEFOOTMANTILE, WHITEDUKETILE, WHITEFOOTMANTILE, EMPTYTILE, EMPTYTILE]]
         self.whiteToPlay = 1
         self.bags = Bags()
-        self.whiteInCheck = False
-        self.blackInCheck = False
     def print_board(self):
         for row in range(NUM_COLS):
             line = ""
@@ -312,6 +299,8 @@ def showPotentialMoves(board, moves):
 def moveUnit(board, move, moveType, row, col):
     newState = copy.deepcopy(board)
     toMove = newState.board[row][col]
+    if newState.board[move[0]][move[1]].type == BLACKDUKE or newState.board[move[0]][move[1]].type == WHITEDUKE:
+        print("THIS is literally illegal")
     if moveType != STRIKE:
         newState.board[move[0]][move[1]] = toMove
         newState.board[row][col] = EMPTYTILE
@@ -334,7 +323,7 @@ def gen_legal_placements(board):
     target = (0, 0)
     for row in range(NUM_COLS):
         for col in range(NUM_COLS):
-            if WHITE_TO_PLAY:
+            if board.whiteToPlay == 1:
                 if board.board[row][col].type == WHITEDUKE:
                     target = (row, col)
             else:
@@ -410,9 +399,13 @@ class Node:
             # for state in valid_states:
                 # state.print_board()
             if len(valid_states) != 0:
-                current_state = valid_states[np.random.randint(0, len(valid_states))]
+                current_state = valid_states[np.random.randint(len(valid_states))]
+                current_state.print_board()
             else:
+                print("No result")
                 break
+        print(checkResults(current_state))
+        current_state.print_board()
         return checkResults(current_state)
 
     def best_child(self, c_param=1.4):
@@ -452,52 +445,49 @@ class SearchTree:
         return current_node
 
 def checkResults(state):
-    if check_if_won(state, True):
+    if check_game_won(state, 1):
         return 1
-    elif check_if_won(state, False):
+    elif check_game_won(state, -1):
         return -1
     else:
         return 0
 
 def gen_legal_actions(state):
     valid_states = []
-    if check_in_check(state, state.whiteToPlay):
-        #print(str(state.whiteToPlay) + " in check")
-        if state.whiteToPlay:
-            state.whiteInCheck = True
-        else:
-            state.blackInCheck = True
-    else:
-        if state.whiteToPlay:
-            state.whiteInCheck = False
-        else:
-            state.blackInCheck = False
+    inCheck = check_in_check(state, state.whiteToPlay)
     for row in range(NUM_COLS):
         for col in range(NUM_COLS):
             if state.whiteToPlay == 1:
                 if state.board[row][col].type > 0:
-                    allMoves, allTypes, opponentInCheck = gen_legal_moves(state, row, col)
-                    for index in range(len(allMoves)):
-                        valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+                    if state.board[row][col].type == WHITEDUKE:
+                        allMoves, allTypes = gen_duke_moves(state, state.whiteToPlay)
+                        for index in range(len(allMoves)):
+                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+                    if not inCheck and not state.board[row][col].type != WHITEDUKE:
+                        allMoves, allTypes = gen_legal_moves(state, row, col, True)
+                        for index in range(len(allMoves)):
+                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
             else:
                 if state.board[row][col].type < 0:
-                    allMoves, allTypes, opponentInCheck = gen_legal_moves(state, row, col)
-                    for index in range(len(allMoves)):
-                        valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
-
-    if (state.whiteToPlay == 1 and not state.whiteInCheck) or (state.whiteToPlay == -1 and not state.blackInCheck):
-        newUnit = state.bags.pull(state.whiteToPlay)
-        if newUnit != EMPTYTILE:
-            placementOptions = gen_legal_placements(state)
-            for option in placementOptions:
-                valid_states.append(placeUnit(state, option, newUnit))
+                    if state.board[row][col].type == BLACKDUKE:
+                        allMoves, allTypes = gen_duke_moves(state, state.whiteToPlay)
+                        for index in range(len(allMoves)):
+                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+                    if not inCheck and state.board[row][col].type != BLACKDUKE:
+                        allMoves, allTypes = gen_legal_moves(state, row, col, True)
+                        for index in range(len(allMoves)):
+                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+        if not inCheck:
+            newUnit = state.bags.pull(state.whiteToPlay)
+            if newUnit != EMPTYTILE:
+                placementOptions = gen_legal_placements(state)
+                for option in placementOptions:
+                    valid_states.append(placeUnit(state, option, newUnit))
     return valid_states
-
 
 def play():
     # Generate board and bags
     GAMEBOARD = Board(NUM_COLS)
-
     # Have player enter starting info
     startingCol = int(input("Enter the column of your Duke (0 - 5): "))
     GAMEBOARD = placeUnit(GAMEBOARD, (5, startingCol), WHITEDUKETILE)
@@ -523,7 +513,7 @@ def play():
         if action == 0:
             col = int(input("Enter the column of the piece to move: "))
             row = NUM_COLS - 1 - int(input("Enter the row of the piece to move: "))
-            moveOptions, moveTypes, ignore = gen_legal_moves(GAMEBOARD, row, col)
+            moveOptions, moveTypes = gen_legal_moves(GAMEBOARD, row, col, True)
             if len(moveOptions) == 0:
                 print("No moves available for the selected unit, please try again")
                 continue
@@ -531,7 +521,6 @@ def play():
             moveIndex = int(
                 input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
             GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], moveTypes[moveIndex], row, col)
-            WHITE_TO_PLAY = False
         if action == 1:
             newUnit = GAMEBOARD.bags.pull(True)
             if newUnit == EMPTYTILE:
@@ -542,7 +531,6 @@ def play():
                 len(placementOptions) - 1) + "): "))
             GAMEBOARD = placeUnit(GAMEBOARD, placementOptions[moveIndex], newUnit)
             GAMEBOARD.print_board()
-            WHITE_TO_PLAY = False
         result = checkResults(GAMEBOARD)
         if result > 0:
             print("White wins!")
@@ -557,17 +545,16 @@ def play():
         tree = SearchTree(root)
         best_node = tree.choose_action(100)
         GAMEBOARD = best_node.state
-        best_node.state.print_board()
     print("Game ended")
 
 
-play()
-#GAMEBOARD = Board(NUM_COLS)
+#play()
+GAMEBOARD = Board(NUM_COLS)
 # GAMEBOARD.print_board()
-#root = Node(GAMEBOARD)
-#tree = SearchTree(root)
-#best_node = tree.choose_action(100)
-#best_node.state.print_board()
+root = Node(GAMEBOARD)
+tree = SearchTree(root)
+best_node = tree.choose_action(1000)
+best_node.state.print_board()
 # placements = gen_legal_placements(GAMEBOARD)
 # showPotentialMoves(GAMEBOARD, placements)
 # GAMEBOARD = placeUnit(GAMEBOARD, placements[0], WHITEFOOTMANTILE)
