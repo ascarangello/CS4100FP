@@ -181,6 +181,9 @@ def gen_legal_moves(board, row, col, noDukeAttack):
                         moveTypes.append(moveType)
                         stop = True
                         continue
+                    else:
+                        stop = True
+                        continue
                 else:
                     stop = True
 
@@ -280,6 +283,9 @@ class Board:
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE]]
         self.whiteToPlay = 1
         self.bags = Bags()
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
     def print_board(self):
         for row in range(NUM_COLS):
             line = ""
@@ -410,12 +416,17 @@ class Node:
                 # state.print_board()
             if len(valid_states) != 0:
                 current_state = valid_states[np.random.randint(len(valid_states))]
-                current_state.print_board()
+                # current_state.print_board()
             else:
-                print("No result")
+                print("No valid states left somehow")
+                #print(check_in_check(current_state, 1))
+                #print(check_in_check(current_state, -1))
+                #1
+                # print(current_state.whiteToPlay)
+                # current_state.print_board()
                 break
-        current_state.print_board()
-        print(len(gen_duke_moves(current_state, current_state.whiteToPlay)))
+        # current_state.print_board()
+        #cprint(len(gen_duke_moves(current_state, current_state.whiteToPlay)))
         return checkResults(current_state)
 
     def best_child(self, c_param=1.4):
@@ -423,6 +434,7 @@ class Node:
             (c.q() / c.n()) + 1.4 * np.sqrt((2 * np.log(self.n()) / c.n()))
             for c in self.children
         ]
+        print(self.children)
         return self.children[np.argmax(weights)]
 
     def is_fully_expanded(self):
@@ -443,7 +455,7 @@ class SearchTree:
             n = self.tree_policy()
             reward = n.rollout()
             n.backpropogate(reward)
-        return self.root.best_child(c_param=0.0)
+        return self.root.best_child(c_param=0.)
 
     def tree_policy(self):
         current_node = self.root
@@ -472,21 +484,25 @@ def gen_legal_actions(state):
                     if state.board[row][col].type == WHITEDUKE:
                         allMoves, allTypes = gen_duke_moves(state, state.whiteToPlay)
                         for index in range(len(allMoves)):
-                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
-                    if not inCheck and not state.board[row][col].type != WHITEDUKE:
+                            resultState = moveUnit(state, allMoves[index], allTypes[index], row, col)
+                            valid_states.append(resultState)
+                    if not inCheck and state.board[row][col].type != WHITEDUKE:
                         allMoves, allTypes = gen_legal_moves(state, row, col, True)
                         for index in range(len(allMoves)):
-                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+                            resultState = moveUnit(state, allMoves[index], allTypes[index], row, col)
+                            valid_states.append(resultState)
             else:
                 if state.board[row][col].type < 0:
                     if state.board[row][col].type == BLACKDUKE:
                         allMoves, allTypes = gen_duke_moves(state, state.whiteToPlay)
                         for index in range(len(allMoves)):
-                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+                            resultState = moveUnit(state, allMoves[index], allTypes[index], row, col)
+                            valid_states.append(resultState)
                     if not inCheck and state.board[row][col].type != BLACKDUKE:
                         allMoves, allTypes = gen_legal_moves(state, row, col, True)
                         for index in range(len(allMoves)):
-                            valid_states.append(moveUnit(state, allMoves[index], allTypes[index], row, col))
+                            resultState = moveUnit(state, allMoves[index], allTypes[index], row, col)
+                            valid_states.append(resultState)
         if not inCheck and len(gen_legal_placements(state)) > 0:
             newUnit = state.bags.pull(state.whiteToPlay)
             if newUnit != EMPTYTILE:
@@ -532,7 +548,7 @@ def play():
                 input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
             GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], moveTypes[moveIndex], row, col)
         if action == 1:
-            newUnit = GAMEBOARD.bags.pull(True)
+            newUnit = GAMEBOARD.bags.pull(GAMEBOARD.whiteToPlay)
             if newUnit == EMPTYTILE:
                 continue
             placementOptions = gen_legal_placements(GAMEBOARD)
@@ -559,12 +575,13 @@ def play():
 
 
 play()
-#GAMEBOARD = Board(NUM_COLS)
+# GAMEBOARD = Board(NUM_COLS)
+# GAMEBOARD.whiteToPlay = 1
 # GAMEBOARD.print_board()
+# print(gen_legal_actions(GAMEBOARD))
 # root = Node(GAMEBOARD)
 # tree = SearchTree(root)
-# best_node = tree.choose_action(5)
-# print(len(gen_legal_actions(best_node.state)))
+# best_node = tree.choose_action(1)
 # best_node.state.print_board()
 # placements = gen_legal_placements(GAMEBOARD)
 # showPotentialMoves(GAMEBOARD, placements)
