@@ -97,7 +97,7 @@ BLACKDRAGOONTILE = Tile(BLACKDRAGOON, DRAGOONUP, DRAGOONDOWN)
 # USE THIS TO GENERATE ALL LEGAL MOVES FOR A TILE AT THE GIVEN ROW AND COL
 # RETURNS 2 ARRAYS, ONE OF THE DESTINATION ROW AND COLS OF ALL VALID MOVES
 # SECOND ARRAY HAS THE TYPE OF MOVE, NEED THAT FOR MAKING MOVE
-def gen_legal_moves(board, row, col, noDukeAttack):
+def gen_legal_moves(board, row, col):
     tile = board.board[row][col]
     isWhiteTile = tile.type // abs(tile.type)
     legal_moves = []
@@ -136,25 +136,22 @@ def gen_legal_moves(board, row, col, noDukeAttack):
                 targetType = board.board[row + y_delta][col + x_delta].type
                 if targetType == EMPTY or (targetType < EMPTY and tile.type > EMPTY) or (
                         targetType > EMPTY and tile.type < EMPTY):
-                    if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
-                        legal_moves.append((row + y_delta, col + x_delta))
-                        moveTypes.append(moveType)
+                    legal_moves.append((row + y_delta, col + x_delta))
+                    moveTypes.append(moveType)
 
         if moveType == JUMP:
             targetType = board.board[row + y_delta][col + x_delta].type
             if targetType == EMPTY or (targetType < EMPTY and tile.type > EMPTY) or (
                     targetType > EMPTY and tile.type < EMPTY):
-                if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
-                    legal_moves.append((row + y_delta, col + x_delta))
-                    moveTypes.append(moveType)
+                legal_moves.append((row + y_delta, col + x_delta))
+                moveTypes.append(moveType)
 
         if moveType == STRIKE:
             targetType = board.board[row + y_delta][col + x_delta].type
             if (targetType < EMPTY and tile.type > EMPTY) or (
                     targetType > EMPTY and tile.type < EMPTY):
-                if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
-                    legal_moves.append((row + y_delta, col + x_delta))
-                    moveTypes.append(moveType)
+                legal_moves.append((row + y_delta, col + x_delta))
+                moveTypes.append(moveType)
 
         if moveType == SLIDE:
             x_index = x_delta
@@ -176,14 +173,10 @@ def gen_legal_moves(board, row, col, noDukeAttack):
                     x_index += x_delta
                     y_index += y_delta
                 elif (targetType < EMPTY and tile.type > EMPTY) or (targetType > EMPTY and tile.type < EMPTY):
-                    if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
-                        legal_moves.append((y_pos, x_pos))
-                        moveTypes.append(moveType)
-                        stop = True
-                        continue
-                    else:
-                        stop = True
-                        continue
+                    legal_moves.append((y_pos, x_pos))
+                    moveTypes.append(moveType)
+                    stop = True
+                    continue
                 else:
                     stop = True
 
@@ -207,11 +200,10 @@ def gen_legal_moves(board, row, col, noDukeAttack):
                     x_index += x_delta
                     y_index += y_delta
                 elif (targetType < EMPTY and tile.type > EMPTY) or (targetType > EMPTY and tile.type < EMPTY):
-                    if not noDukeAttack or (noDukeAttack and targetType != BLACKDUKE and targetType != WHITEDUKE):
-                        legal_moves.append((y_pos, x_pos))
-                        moveTypes.append(moveType)
-                        x_index += x_delta
-                        y_index += y_delta
+                    legal_moves.append((y_pos, x_pos))
+                    moveTypes.append(moveType)
+                    x_index += x_delta
+                    y_index += y_delta
                 else:
                     x_index += x_delta
                     y_index += y_delta
@@ -220,7 +212,7 @@ def gen_legal_moves(board, row, col, noDukeAttack):
 
 class Board:
     def __init__(self, size):
-        self.board = [[EMPTYTILE, BLACKFOOTMANTILE, BLACKDUKETILE, BLACKFOOTMANTILE, EMPTYTILE, EMPTYTILE],
+        self.board = [[EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
                       [EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE, EMPTYTILE],
@@ -335,8 +327,12 @@ class Node:
 
 
     def q(self):
-        wins = self.results[self.state.whiteToPlay]
-        loses = self.results[-1 * self.state.whiteToPlay]
+        if self.state.whiteToPlay == 1:
+            wins = self.results[1]
+            loses = self.results[-1]
+        else:
+            wins = self.results[-1]
+            loses = self.results[1]
         return wins - loses
 
     def n(self):
@@ -390,7 +386,7 @@ class SearchTree:
             n = self.tree_policy()
             reward = n.rollout()
             n.backpropogate(reward)
-        return self.root.best_child(c_param=0.)
+        return self.root.best_child()
 
     def tree_policy(self):
         current_node = self.root
@@ -417,19 +413,20 @@ def checkResults(state):
     else:
         return 0
 
-def gen_legal_actions(state):
+def gen_legal_actions(board):
+    state = copy.deepcopy(board)
     valid_states = []
     for row in range(NUM_COLS):
         for col in range(NUM_COLS):
             if state.whiteToPlay == 1:
                 if state.board[row][col].type > 0:
-                    allMoves, allTypes = gen_legal_moves(state, row, col, False)
+                    allMoves, allTypes = gen_legal_moves(state, row, col)
                     for index in range(len(allMoves)):
                         resultState = moveUnit(state, allMoves[index], allTypes[index], row, col)
                         valid_states.append(resultState)
             else:
                 if state.board[row][col].type < 0:
-                    allMoves, allTypes = gen_legal_moves(state, row, col, False)
+                    allMoves, allTypes = gen_legal_moves(state, row, col)
                     for index in range(len(allMoves)):
                         resultState = moveUnit(state, allMoves[index], allTypes[index], row, col)
                         valid_states.append(resultState)
@@ -445,6 +442,17 @@ def play():
     # Generate board and bags
     GAMEBOARD = Board(NUM_COLS)
     # Have player enter starting info
+    DIFFICULTY = 0
+    selection = int(input("Select which level of difficulty you would like (1 - 3): "))
+    if selection == 1:
+        DIFFICULTY = 100
+    elif selection == 2:
+        DIFFICULTY = 500
+    elif selection == 3:
+        DIFFICULTY = 1000
+    else:
+        print("Invalid difficulty selection try again please")
+        play()
     startingCol = int(input("Enter the column of your Duke (0 - 5): "))
     GAMEBOARD = placeStartingUnit(GAMEBOARD, (5, startingCol), WHITEDUKETILE)
     GAMEBOARD.print_board()
@@ -459,6 +467,14 @@ def play():
     moveIndex = int(
         input("Select where you would like to place your second footman (0 - " + str(len(footman1Options) - 1) + "): "))
     GAMEBOARD = placeStartingUnit(GAMEBOARD, footman2Options[moveIndex], WHITEFOOTMANTILE)
+
+    print("AI placing starting units now...")
+    GAMEBOARD.whiteToPlay = -1
+    GAMEBOARD = placeStartingUnit(GAMEBOARD, (0, random.randrange(NUM_COLS)), BLACKDUKETILE)
+    footman1Options = gen_legal_placements(GAMEBOARD)
+    GAMEBOARD = placeStartingUnit(GAMEBOARD, footman1Options[random.randrange(len(footman1Options))], BLACKFOOTMANTILE)
+    footman2Options = gen_legal_placements(GAMEBOARD)
+    GAMEBOARD = placeStartingUnit(GAMEBOARD, footman2Options[random.randrange(len(footman2Options))], BLACKFOOTMANTILE)
     GAMEBOARD.whiteToPlay = 1
     # Main game loop
     gameOver = False
@@ -469,14 +485,18 @@ def play():
         if action == 0:
             col = int(input("Enter the column of the piece to move: "))
             row = NUM_COLS - 1 - int(input("Enter the row of the piece to move: "))
-            moveOptions, moveTypes = gen_legal_moves(GAMEBOARD, row, col, False)
-            if len(moveOptions) == 0:
-                print("No moves available for the selected unit, please try again")
+            try:
+                moveOptions, moveTypes = gen_legal_moves(GAMEBOARD, row, col)
+                if len(moveOptions) == 0:
+                    print("No moves available for the selected unit, please try again")
+                    continue
+                showPotentialMoves(GAMEBOARD, moveOptions)
+                moveIndex = int(
+                    input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
+                GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], moveTypes[moveIndex], row, col)
+            except:
+                print("Invalid tile location or invalid move index, try again")
                 continue
-            showPotentialMoves(GAMEBOARD, moveOptions)
-            moveIndex = int(
-                input("Select where you would like to move this unit to(0 - " + str(len(moveOptions) - 1) + "): "))
-            GAMEBOARD = moveUnit(GAMEBOARD, moveOptions[moveIndex], moveTypes[moveIndex], row, col)
         if action == 1:
             newUnit = GAMEBOARD.bags.pull(GAMEBOARD.whiteToPlay)
             if newUnit == EMPTYTILE:
@@ -486,7 +506,6 @@ def play():
             moveIndex = int(input("Select where you would like to place the new unit (0 - " + str(
                 len(placementOptions) - 1) + "): "))
             GAMEBOARD = placeUnit(GAMEBOARD, placementOptions[moveIndex], newUnit)
-            GAMEBOARD.print_board()
         result = checkResults(GAMEBOARD)
         if result > 0:
             print("White wins!")
@@ -498,11 +517,23 @@ def play():
             break
         else:
             print("Game continues, no winner yet\n")
-        print("AI playing now")
+        GAMEBOARD.print_board()
+        print("AI playing now...")
         root = Node(GAMEBOARD)
         tree = SearchTree(root)
-        best_node = tree.choose_action(1000)
+        best_node = tree.choose_action(DIFFICULTY)
         GAMEBOARD = best_node.state
+        result = checkResults(GAMEBOARD)
+        if result > 0:
+            print("White wins!")
+            gameOver = True
+            break
+        elif result < 0:
+            print("Black wins")
+            gameOver = True
+            break
+        else:
+            print("Game continues, no winner yet\n")
     print("Game ended")
 
 play()
@@ -514,6 +545,10 @@ play()
 # tree = SearchTree(root)
 # best_node = tree.choose_action(100)
 # best_node.state.print_board()
+# print(best_node.q())
+# print(best_node.results[1])
+# print(best_node.results[-1])
+
 # placements = gen_legal_placements(GAMEBOARD)
 # showPotentialMoves(GAMEBOARD, placements)
 # GAMEBOARD = placeUnit(GAMEBOARD, placements[0], WHITEFOOTMANTILE)
